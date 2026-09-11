@@ -1,26 +1,34 @@
-# JARVIS QA Android
+# Jarvis QA Android
 
-Native Android app for Gopal's QA and personal assistant. It connects directly to Ollama/Qwen on a Windows computer over the same trusted Wi-Fi. It includes Android speech recognition and text-to-speech.
+A standalone Android voice assistant for personal productivity and software QA work.
 
-## Build
+## Features
 
-1. Open this folder in Android Studio.
-2. Allow Gradle sync to finish.
-3. Select Build > Build APK(s).
-4. Install app/build/outputs/apk/debug/app-debug.apk.
+- Voice input through Android speech recognition
+- Human-like Android text-to-speech output
+- Personal assistant and QA Expert modes
+- Offline core commands—no computer connection required after installation
+- Responsive Jetpack Compose interface
+- GitHub Actions APK build
 
-## Automatic GitHub build
+## Install the APK
 
-Push this project to GitHub. Open Actions, select Build JARVIS APK, and choose Run workflow. Download the JARVIS-QA-debug artifact after the build succeeds.
+1. Open the repository's **Actions** tab.
+2. Select the latest successful **Build Android APK** run.
+3. Download `jarvis-qa-debug-apk` from **Artifacts**.
+4. Extract the ZIP and install `app-debug.apk` on Android.
+5. If prompted, allow installation from your browser/files app, then grant microphone access.
 
-## Connect Ollama
+## Local build
 
-Find the computer's Wi-Fi IPv4 address with ipconfig.
+Requires JDK 17 and Android SDK 35.
 
-Run in Windows PowerShell:
+```bash
+gradle assembleDebug
+```
 
-    setx OLLAMA_HOST "0.0.0.0:11434"
+The APK is created at `app/build/outputs/apk/debug/app-debug.apk`.
 
-Restart Ollama. Allow TCP port 11434 through Windows Firewall on the Private network only. Keep the phone and computer on the same trusted Wi-Fi.
+## Privacy
 
-In the app Settings, enter http://YOUR-PC-IP:11434. Never expose port 11434 to the public internet.
+Core responses are processed inside the app. Android's speech recognition and text-to-speech engines may use their configured online services. No API key is included in this repository.
