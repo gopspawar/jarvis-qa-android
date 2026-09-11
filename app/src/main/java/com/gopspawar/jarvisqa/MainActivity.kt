@@ -50,11 +50,13 @@ enum class AgentMode(val label: String) { PERSONAL("Personal"), QA("QA Expert") 
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
+    private lateinit var llm: LocalLlmManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tts = TextToSpeech(this, this)
-        setContent { JarvisApp(::speak) }
+        llm = LocalLlmManager(this)
+        setContent { JarvisApp(::speak, llm) }
     }
 
     override fun onInit(status: Int) {
@@ -72,12 +74,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     override fun onDestroy() {
         tts?.stop()
         tts?.shutdown()
+        llm.close()
         super.onDestroy()
     }
 }
 
 @Composable
-private fun JarvisApp(speak: (String) -> Unit) {
+private fun JarvisApp(speak: (String) -> Unit, llm: LocalLlmManager) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val navy = Color(0xFF07111F)
     val cyan = Color(0xFF3DE6FF)
@@ -85,11 +88,14 @@ private fun JarvisApp(speak: (String) -> Unit) {
     var input by remember { mutableStateOf("") }
     var listening by remember { mutableStateOf(false) }
     var voiceEnabled by remember { mutableStateOf(true) }
+    var processing by remember { mutableStateOf(false) }
+    val modelState by llm.state.collectAsState()
     val messages = remember {
         mutableStateListOf(ChatMessage("Good day, Gopal. Jarvis is online. How may I assist you?", true))
     }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { llm.initializeIfPresent() }
 
     val speechLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -108,11 +114,17 @@ private fun JarvisApp(speak: (String) -> Unit) {
         val prompt = input.trim()
         if (prompt.isEmpty()) return
         messages += ChatMessage(prompt, false)
-        val response = JarvisEngine.respond(prompt, mode)
-        messages += ChatMessage(response, true)
         input = ""
-        if (voiceEnabled) speak(response)
-        scope.launch { listState.animateScrollToItem(messages.lastIndex) }
+        processing = true
+        scope.launch {
+            val response = if (modelState == ModelState.Ready) {
+                runCatching { llm.complete(prompt, mode) }.getOrElse { "Local AI error: ${it.message}" }
+            } else JarvisEngine.respond(prompt, mode)
+            messages += ChatMessage(response, true)
+            processing = false
+            if (voiceEnabled) speak(response)
+            listState.animateScrollToItem(messages.lastIndex)
+        }
     }
 
     MaterialTheme(
@@ -136,6 +148,7 @@ private fun JarvisApp(speak: (String) -> Unit) {
 
                 Spacer(Modifier.height(12.dp))
                 AgentSelector(mode) { mode = it }
+                ModelStatus(modelState, cyan) { scope.launch { llm.downloadAndLoad() } }
                 Spacer(Modifier.height(14.dp))
                 JarvisCore(listening, cyan)
                 Text(
@@ -178,10 +191,29 @@ private fun JarvisApp(speak: (String) -> Unit) {
                         },
                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = cyan)
                     ) { Icon(if (listening) Icons.Default.Stop else Icons.Default.Mic, null, tint = navy) }
-                    FilledIconButton(onClick = ::send) { Icon(Icons.Default.Send, "Send") }
+                    FilledIconButton(onClick = ::send, enabled = !processing) { Icon(Icons.Default.Send, "Send") }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ModelStatus(state: ModelState, cyan: Color, download: () -> Unit) {
+    val label = when (state) {
+        ModelState.NotDownloaded -> "Enable offline Qwen AI (~1.1 GB)"
+        is ModelState.Downloading -> "Downloading Qwen AI… ${state.percent}%"
+        ModelState.Loading -> "Loading Qwen AI…"
+        ModelState.Ready -> "Qwen 1.7B • ON-DEVICE AI READY"
+        is ModelState.Error -> "Retry AI setup: ${state.message}"
+    }
+    val actionable = state is ModelState.NotDownloaded || state is ModelState.Error
+    Surface(
+        color = cyan.copy(alpha = .08f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clickable(enabled = actionable, onClick = download)
+    ) {
+        Text(label, color = if (state == ModelState.Ready) cyan else Color.LightGray, fontSize = 11.sp, modifier = Modifier.padding(10.dp))
     }
 }
 
