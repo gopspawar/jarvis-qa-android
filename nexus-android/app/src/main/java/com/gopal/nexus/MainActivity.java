@@ -35,8 +35,10 @@ public class MainActivity extends Activity {
         });
         LinearLayout bar=new LinearLayout(this);
         Button work=new Button(this);work.setText("Work");work.setOnClickListener(v->js("go(document.querySelector('[data-s=work]'))"));
+        Button gemini=new Button(this);gemini.setText("Open Gemini");gemini.setTextSize(12);gemini.setAllCaps(false);gemini.setOnClickListener(v->openGemini());
         Button menu=new Button(this);menu.setText("App tools");menu.setOnClickListener(v->showTools());
         bar.addView(work,new LinearLayout.LayoutParams(0,48*getResources().getDisplayMetrics().densityDpi/160,1));
+        bar.addView(gemini,new LinearLayout.LayoutParams(0,48*getResources().getDisplayMetrics().densityDpi/160,1));
         bar.addView(menu,new LinearLayout.LayoutParams(0,48*getResources().getDisplayMetrics().densityDpi/160,1));root.addView(bar);
         web=new WebView(this);root.addView(web,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
         WebSettings settings=web.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(true);
@@ -48,6 +50,7 @@ public class MainActivity extends Activity {
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
                 Uri uri=request.getUrl();
                 if("https".equals(uri.getScheme())&&"appassets.androidplatform.net".equals(uri.getHost())&&"/assets/index.html".equals(uri.getPath()))return false;
+                if(request.isForMainFrame()&&"nexus".equals(uri.getScheme())&&"gemini".equals(uri.getHost())){openGemini();return true;}
                 if("nexus".equals(uri.getScheme())&&"backup".equals(uri.getHost())){exportBackup();return true;}
                 if("https".equals(uri.getScheme())||"http".equals(uri.getScheme())||"mailto".equals(uri.getScheme())){
                     try{startActivity(new Intent(Intent.ACTION_VIEW,uri));}catch(ActivityNotFoundException e){toast("No app can open this link.");}
@@ -72,6 +75,14 @@ public class MainActivity extends Activity {
     }
     private void js(String code){web.evaluateJavascript(code,null);}
     private void toast(String text){Toast.makeText(this,text,Toast.LENGTH_LONG).show();}
+    private void openGemini(){
+        try {
+            Intent launch=getPackageManager().getLaunchIntentForPackage("com.google.android.apps.bard");
+            if(launch!=null){startActivity(launch);return;}
+        } catch(ActivityNotFoundException | SecurityException ignored) {}
+        try {startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://gemini.google.com/")));}
+        catch(ActivityNotFoundException | SecurityException e){toast("Install Gemini or enable a browser to continue.");}
+    }
     private void showTools(){new AlertDialog.Builder(this).setTitle("NEXUS tools").setItems(new String[]{"Export backup","Import backup","Set a phone alarm","Voice input","Read latest JARVIS reply","Stop speech"},(d,n)->{
         switch(n){
             case 0:exportBackup();break;
